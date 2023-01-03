@@ -1,6 +1,7 @@
 package io.hypersistence.utils.hibernate.type.basic;
 
 import io.hypersistence.utils.hibernate.util.AbstractPostgreSQLIntegrationTest;
+import io.hypersistence.utils.hibernate.query.SQLExtractor;
 import org.hibernate.annotations.Type;
 import org.hibernate.annotations.TypeDef;
 import org.hibernate.jpa.TypedParameterValue;
@@ -9,12 +10,18 @@ import org.junit.Before;
 import org.junit.Test;
 
 import javax.persistence.*;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Root;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 /**
@@ -68,6 +75,32 @@ public class PostgreSQLEnumTest extends AbstractPostgreSQLIntegrationTest {
             Post post = entityManager.find(Post.class, 1L);
             assertEquals(PostStatus.PENDING, post.getStatus());
         });
+    }
+    
+    @Test
+    public void testCriteriaAPI() {
+      doInJPA(entityManager -> {
+        CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+
+        CriteriaQuery<PostDto> criteria = builder.createQuery(PostDto.class);
+
+        Root<Post> postComment = criteria.from(Post.class);
+
+        criteria.select(builder.construct(PostDto.class, postComment.get("status")));
+
+        TypedQuery<PostDto> criteriaQuery = entityManager.createQuery(criteria);
+
+        List<PostDto> p = criteriaQuery.getResultList();
+
+        assertFalse(p.isEmpty());
+
+        String sql = SQLExtractor.from(criteriaQuery);
+
+        assertNotNull(sql);
+
+        LOGGER.info("The Criteria API query: [\n{}\n]\ngenerates the following SQL query: [\n{}\n]",
+            criteriaQuery.unwrap(org.hibernate.query.Query.class).getQueryString(), sql);
+      });
     }
 
     @Test
@@ -129,4 +162,32 @@ public class PostgreSQLEnumTest extends AbstractPostgreSQLIntegrationTest {
             this.status = status;
         }
     }
+    
+    public static class PostDto {
+
+        private PostStatus status;
+
+        public PostStatus getStatus() {
+          return status;
+        }
+
+        public void setStatus(PostStatus status) {
+          this.status = status;
+        }
+
+        public PostDto(PostStatus status) {
+          super();
+          this.status = status;
+        }
+
+        public PostDto(String status) {
+          System.out.println("goo");
+          this.status = PostStatus.valueOf(status);
+        }
+
+        public PostDto() {
+          super();
+        }
+
+      }
 }

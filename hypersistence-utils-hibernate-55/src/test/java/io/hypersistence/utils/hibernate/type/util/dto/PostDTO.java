@@ -9,9 +9,12 @@ public class PostDTO {
 
 	private String title;
 
-	public PostDTO(Number id, String title) {
+	private PostStatus status;
+
+	public PostDTO(Number id, String title, PostStatus status) {
 		this.id = id.longValue();
 		this.title = title;
+		this.status = status;
 	}
 
 	public Long getId() {
@@ -20,5 +23,9 @@ public class PostDTO {
 
 	public String getTitle() {
 		return title;
+	}
+
+	public PostStatus getStatus() {
+		return status;
 	}
 }

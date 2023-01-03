@@ -1,13 +1,20 @@
 package io.hypersistence.utils.hibernate.type.util.dto;
 
 import io.hypersistence.utils.hibernate.type.util.ClassImportIntegrator;
-import io.hypersistence.utils.hibernate.util.AbstractTest;
+import io.hypersistence.utils.hibernate.util.AbstractPostgreSQLIntegrationTest;
+import io.hypersistence.utils.hibernate.type.basic.PostgreSQLEnumType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import org.hibernate.annotations.Type;
 import org.hibernate.integrator.spi.Integrator;
 import org.junit.Test;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,12 +22,15 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 
+import javax.sql.DataSource;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 /**
  * @author Vlad Mihalcea
  */
-public class DTOProjectionImportTest extends AbstractTest {
+public class DTOProjectionImportTest extends AbstractPostgreSQLIntegrationTest {
 
     @Override
     protected Class<?>[] entities() {
@@ -33,6 +43,26 @@ public class DTOProjectionImportTest extends AbstractTest {
     protected Integrator integrator() {
         return new ClassImportIntegrator(Arrays.asList(PostDTO.class));
     }
+    
+    public void init() {
+        DataSource dataSource = newDataSource();
+        try (Connection connection = dataSource.getConnection()) {
+            try (Statement statement = connection.createStatement()) {
+                try {
+                    statement.executeUpdate(
+                        "DROP TYPE post_status_info CASCADE"
+                    );
+                } catch (SQLException ignore) {
+                }
+                statement.executeUpdate(
+                    "CREATE TYPE post_status_info AS ENUM ('PENDING', 'APPROVED', 'SPAM')"
+                );
+            }
+        } catch (SQLException e) {
+            fail(e.getMessage());
+        }
+        super.init();
+    }
 
     @Override
     public void afterInit() {
@@ -40,6 +70,7 @@ public class DTOProjectionImportTest extends AbstractTest {
             Post post = new Post();
             post.setId(1L);
             post.setTitle("High-Performance Java Persistence");
+            post.setStatus(PostStatus.APPROVED);
             post.setCreatedBy("Vlad Mihalcea");
             post.setCreatedOn(Timestamp.from(
                 LocalDateTime.of(2020, 11, 2, 12, 0, 0).toInstant(ZoneOffset.UTC)
@@ -59,7 +90,8 @@ public class DTOProjectionImportTest extends AbstractTest {
             List<PostDTO> postDTOs = entityManager.createQuery(
                 "select new PostDTO(" +
                 "    p.id, " +
-                "    p.title " +
+                "    p.title, " +
+                "    p.status " +
                 ") " +
                 "from Post p " +
                 "where p.createdOn > :fromTimestamp", PostDTO.class)
@@ -84,6 +116,11 @@ public class DTOProjectionImportTest extends AbstractTest {
         private Long id;
 
         private String title;
+        
+    	@Enumerated(EnumType.STRING)
+    	@Column(columnDefinition = "post_status_info")
+    	@Type(PostgreSQLEnumType.class)
+    	private PostStatus status;
 
         @Column(name = "created_on")
         private Timestamp createdOn;
@@ -144,5 +181,13 @@ public class DTOProjectionImportTest extends AbstractTest {
         public void setUpdatedBy(String updatedBy) {
             this.updatedBy = updatedBy;
         }
+        
+        public PostStatus getStatus() {
+    	    return status;
+    	}
+
+    	public void setStatus(PostStatus status) {
+    	    this.status = status;
+    	}
     }
 }
